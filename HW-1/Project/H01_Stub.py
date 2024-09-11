@@ -39,6 +39,12 @@ def read_csv_convert_to_numpy(fileName='carSUV_normalized.csv'):
 
     # functions to use: pandas.read_csv, .to_numpy from pandas dataframe
 
+    df = pd.read_csv(fileName)
+    # Convert features to a 2D numpy array
+    numpy_x = df[['ZeroToSixty', 'PowerHP']].to_numpy()
+    # Convert class labels from two columns into one column (-1 for SUVs and 1 for Cars)
+    numpy_y = np.array([1 if x == 1 else -1 for x in df['IsCar']]).reshape(-1,1)
+
     return numpy_x, numpy_y
 
 def calc_error_rate_for_single_vector_w(w, numpy_x, numpy_y):
@@ -57,6 +63,10 @@ def calc_error_rate_for_single_vector_w(w, numpy_x, numpy_y):
     #print(w.shape) # (#features=2,1)
     #print(numpy_x.shape) # (#samples=10,#features=2)
     #print(numpy_y.shape) # (#samples=10,1)
+    
+    predictions = np.sign(numpy_x @ w)  # Matrix multiplication and sign function
+    error_count = np.sum(predictions != numpy_y.reshape(-1, 1))
+    error_rate = error_count / len(numpy_y)
     return error_rate
 
 def train_and_evaluate(numpy_x, numpy_y, n_epochs = 20, c = 0.01):
@@ -78,8 +88,22 @@ def train_and_evaluate(numpy_x, numpy_y, n_epochs = 20, c = 0.01):
 
     # at the end of training, call this function to plot the results
     #plot_trained_w_and_dataset(numpy_x, numpy_y, w)
-    return w;
-        
+
+    w = np.random.randn(2, 1)  
+    
+    for epoch in range(n_epochs):
+        for i in range(len(numpy_x)):
+            xi = numpy_x[i].reshape(1, 2)
+            yi = numpy_y[i]
+            prediction = np.sign(xi @ w)
+            if prediction != yi:
+                w += c * (yi - prediction) * xi.T 
+
+        error_rate = calc_error_rate_for_single_vector_w(w, numpy_x, numpy_y)
+
+        print(error_rate)
+    
+    return w
 
 
 # Running data reading, model training, and plotting the linear model over the dataset, using the functions defined above.
@@ -101,6 +125,19 @@ def function_error_rate_2D(w1_range, w2_range, numpy_x, numpy_y):
 
     # your code will be passed on to functions plot3D_function_on_grid and plot_function_on_grid
     # the output should look like in the slides
+
+    W1, W2 = np.meshgrid(w1_range, w2_range)
+
+
+    error_rates = []
+
+    W = np.stack([W1.reshape(-1), W2.reshape(-1)], axis=1)
+
+    for idx, (w1, w2) in enumerate(W):
+        w = np.array([[w1], [w2]])
+        error_rates.append(calc_error_rate_for_single_vector_w(w, numpy_x, numpy_y))
+
+    error_rates_all_ws = np.array(error_rates).reshape(W1.shape)
 
     return error_rates_all_ws
 
@@ -158,6 +195,9 @@ def plot_function_on_grid(function_to_plot, numpy_x, numpy_y):
 
 # Error rate surface plot, over possible model weights, using functions defined above
 
+# Define ranges for w1 and w2
+w1min, w1max = -2.0, 2.0
+w2min, w2max = -2.0, 2.0
 
 w1_range = np.arange(w1min,w1max, 0.01)
 w2_range = np.arange(w2min,w2max, 0.01)
