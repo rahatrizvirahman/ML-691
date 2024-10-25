@@ -10,28 +10,94 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, SubsetRandomSampler
 from torchvision import datasets, transforms
 import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap, ListedColormap
 
 
+np.random.seed(42)
 
 def my_train(train_dataset, test_dataset = None):
-    W = np.random.randn(10,784)
-    b = np.random.randn(10)
-    # above is random, your code should produce "trained" W & b
+    learning_rate = 0.01
+    initial_lambda = 0.001
+    # patience = 3
+    num_classes = 10
+    num_features = 784  # 28x28 pixels
+    
+    # validation_size = 64 
+    # indices = torch.randperm(len(test_dataset)).tolist()
+    # valid_indices = indices[:validation_size]  
+    
+    # Load MNIST dataset
+    # transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
+    # test_dataset = datasets.MNIST(root='./data', train=False, download=True, transform=transform)
+
+   
+    # Create data samplers and loaders:
+   
+    train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True)
+    # validation_loader = DataLoader(test_dataset, batch_size=64)
+
+    # validation_loader = DataLoader(test_dataset, batch_size=64, sampler=SubsetRandomSampler(valid_indices))
+
+
+    # Model setup
+    model = nn.Linear(num_features, num_classes)
+
+    # Loss function
+    criterion = nn.CrossEntropyLoss()
+
+    # Optimizer
+    optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
+
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
+
+    lambda_reg = initial_lambda
+    for epoch in range(25):  # A high number of epochs to allow for convergence
+        model.train()
+        for images, labels in train_loader:
+            images = images.view(-1, 28*28)  # Flatten images
+            outputs = model(images)
+            loss = criterion(outputs, labels) + lambda_reg * sum(p.abs().sum() for p in model.parameters())
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+    
+       
+        scheduler.step()
+    
+    W = model.weight.detach().numpy()
+    b = model.bias.detach().numpy()
+
+
     return W, b
 
-def my_test(W,b,test_dataset):
-    test_error_rate = np.random.randn();
-    # above is random, your code should produce actual error rate (the fraction of misclassified samples from test_dataset)
-    return test_error_rate
+def my_test(W, b, test_dataset):
+    test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
+    
+    # Convert numpy arrays to tensors
+    W = torch.tensor(W, dtype=torch.float32)
+    b = torch.tensor(b, dtype=torch.float32)
+    
+    correct = 0
+    total = 0
+    with torch.no_grad():
+        for images, labels in test_loader:
+            images = images.view(-1, 28*28)
+            outputs = torch.matmul(images, W.t()) + b
+            _, predicted = torch.max(outputs.data, 1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+    
+    error_rate = 1 - correct / total
+    return error_rate
+
 
 
 if __name__ == "__main__":
-
-    import matplotlib.pyplot as plt
-    from matplotlib.colors import LinearSegmentedColormap, ListedColormap
     def find_zero_pixels(train_dataset):
         train_loader = DataLoader(train_dataset, batch_size=1000, shuffle=False)
         all_zeros = None
@@ -50,7 +116,7 @@ if __name__ == "__main__":
     def analyze_zero_overlap(W, zero_pixels, zero_threshold = 1e-2):
         W[np.abs(W) <= zero_threshold] = 0.0
         W_zeros = (W == 0).all(axis=0)
-        
+
         both_zeros = np.logical_and(W_zeros, zero_pixels)
         only_image_zeros = np.logical_and(zero_pixels, np.logical_not(W_zeros))
         only_W_zeros = np.logical_and(W_zeros, np.logical_not(zero_pixels))
